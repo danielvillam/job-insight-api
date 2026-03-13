@@ -1,8 +1,17 @@
-"""Configuración de conexión a la base de datos SQLite con SQLAlchemy async."""
+"""Configuración de conexión a base de datos con SQLAlchemy async."""
+
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-DATABASE_URL = "sqlite+aiosqlite:///./job_insight.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./job_insight.db")
+
+# Render suele entregar postgres:// o postgresql://; para SQLAlchemy async
+# convertimos al driver asyncpg.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
