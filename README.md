@@ -22,7 +22,7 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 | Framework | FastAPI 0.115 |
 | Servidor ASGI | Uvicorn 0.30 |
 | Validación | Pydantic v2 |
-| Base de datos | SQLite (aiosqlite) |
+| Base de datos | SQLite (local) / PostgreSQL (producción) |
 | ORM | SQLAlchemy 2.0 async |
 | Lenguaje | Python 3.11+ |
 
@@ -87,12 +87,34 @@ El servidor queda disponible en `http://127.0.0.1:8000`.
 
 ---
 
+## Producción (Render)
+
+La API ya está desplegada en Render y disponible públicamente.
+
+- Base URL: `https://job-insight-api.onrender.com/`
+- Swagger UI: `https://job-insight-api.onrender.com/docs`
+- ReDoc: `https://job-insight-api.onrender.com/redoc`
+
+### Variables de entorno recomendadas (producción)
+
+- `PYTHON_VERSION=3.11.9`
+- `DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DBNAME`
+
+### Nota de base de datos
+
+- **No se recomienda SQLite en producción** en Render.
+- Para persistencia estable usa **PostgreSQL** (Render PostgreSQL o externo).
+
+---
+
 ## Documentación interactiva
 
 | Interfaz | URL |
 |---|---|
-| Swagger UI | http://127.0.0.1:8000/docs |
-| ReDoc | http://127.0.0.1:8000/redoc |
+| Swagger UI (producción) | https://job-insight-api.onrender.com/docs |
+| ReDoc (producción) | https://job-insight-api.onrender.com/redoc |
+| Swagger UI (local) | http://127.0.0.1:8000/docs |
+| ReDoc (local) | http://127.0.0.1:8000/redoc |
 
 ---
 
@@ -240,18 +262,24 @@ El diccionario cubre más de 100 habilidades en 7 categorías:
 ## Ejemplo completo de flujo
 
 ```bash
+# Produccion (Render)
+BASE_URL="https://job-insight-api.onrender.com"
+
+# Alternativa local
+# BASE_URL="http://127.0.0.1:8000"
+
 # 1. Analizar una vacante
-curl -X POST http://127.0.0.1:8000/jobs/analyze-job \
+curl -X POST "$BASE_URL/jobs/analyze-job" \
   -H "Content-Type: application/json" \
   -d '{"description": "Python developer, 5+ years, Django, Docker, PostgreSQL, AWS required."}'
 
 # 2. Comparar perfil con la vacante
-curl -X POST http://127.0.0.1:8000/analysis/match-profile \
+curl -X POST "$BASE_URL/analysis/match-profile" \
   -H "Content-Type: application/json" \
   -d '{"profile_skills": ["python", "django", "postgres"], "job_description": "Python developer, 5+ years, Django, Docker, PostgreSQL, AWS required."}'
 
 # 3. Obtener ruta de aprendizaje para habilidades faltantes
-curl -X POST http://127.0.0.1:8000/analysis/learning-path \
+curl -X POST "$BASE_URL/analysis/learning-path" \
   -H "Content-Type: application/json" \
   -d '{"missing_skills": ["docker", "aws"]}'
 ```
