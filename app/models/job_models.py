@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.core.settings import settings
+
 
 class JobDescriptionRequest(BaseModel):
     """Cuerpo de la petición para analizar una oferta laboral."""
@@ -9,6 +11,7 @@ class JobDescriptionRequest(BaseModel):
     description: str = Field(
         ...,
         min_length=20,
+        max_length=settings.request_max_description_length,
         examples=[
             "We are looking for a Python developer with 3+ years of experience "
             "in Django and REST APIs. Knowledge of Docker and PostgreSQL is a plus."

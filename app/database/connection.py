@@ -1,10 +1,17 @@
-"""Configuración de conexión a base de datos con SQLAlchemy async."""
+"""Configuracion de conexion a base de datos con SQLAlchemy async."""
 
-import os
+from collections.abc import AsyncGenerator
+import logging
 
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./job_insight.db")
+from app.core.settings import settings
+
+logger = logging.getLogger(__name__)
+
+DATABASE_URL = settings.database_url
 
 # Render suele entregar postgres:// o postgresql://; para SQLAlchemy async
 # convertimos al driver asyncpg.
@@ -13,7 +20,7 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=settings.debug)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -24,7 +31,18 @@ async def create_tables():
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def get_session() -> AsyncSession:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Generador de sesiones para inyección de dependencias en FastAPI."""
     async with async_session() as session:
         yield session
+
+
+async def check_connection() -> bool:
+    """Verifica conectividad minima con la base de datos."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return True
+    except (SQLAlchemyError, OSError) as exc:
+        logger.warning("Database connectivity check failed: %s", exc)
+        return False

@@ -38,6 +38,7 @@ _SKILL_RESOURCES: dict[str, str] = {
 
 # Categorías con mayor demanda reciben prioridad alta
 _HIGH_PRIORITY_CATEGORIES = {"languages", "frameworks", "databases"}
+_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def generate_learning_path(missing_skills: list[str]) -> list[LearningRecommendation]:
@@ -67,7 +68,6 @@ def generate_learning_path(missing_skills: list[str]) -> list[LearningRecommenda
         ))
 
     # Ordenar: alta prioridad primero
-    _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
     recommendations.sort(key=lambda r: _PRIORITY_ORDER.get(r.priority, 3))
 
     return recommendations

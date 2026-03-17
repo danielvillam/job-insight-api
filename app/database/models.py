@@ -16,7 +16,7 @@ class JobAnalysis(Base):
     __tablename__ = "job_analyses"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    description_hash = Column(String(64), index=True)
+    description_hash = Column(String(64), index=True, nullable=False)
     tech_skills = Column(Text)
     soft_skills = Column(Text)
     experience_years = Column(Integer, nullable=True)
@@ -32,4 +32,6 @@ class ProfileMatch(Base):
     compatibility_percentage = Column(Float)
     matching_skills = Column(Text)
     missing_skills = Column(Text)
+    matching_soft_skills = Column(Text, default="[]")
+    missing_soft_skills = Column(Text, default="[]")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

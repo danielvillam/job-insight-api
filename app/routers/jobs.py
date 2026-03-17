@@ -1,7 +1,12 @@
 """Router para endpoints de análisis de vacantes."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limiter import limiter
+from app.core.settings import settings
+from app.database.connection import get_session
+from app.database.repository import save_job_analysis
 from app.models.job_models import JobDescriptionRequest, JobAnalysisResponse
 from app.services.skill_extractor import extract_skills
 
@@ -15,8 +20,23 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     description="Recibe el texto de una vacante y devuelve habilidades detectadas, "
                 "años de experiencia y soft skills.",
 )
-async def analyze_job(request: JobDescriptionRequest) -> JobAnalysisResponse:
-    result = extract_skills(request.description)
+@limiter.limit(settings.rate_limit_analyze_job)
+async def analyze_job(
+    request: Request,
+    payload: JobDescriptionRequest,
+    session: AsyncSession = Depends(get_session),
+) -> JobAnalysisResponse:
+    result = extract_skills(payload.description)
+
+    await save_job_analysis(
+        session=session,
+        description=payload.description,
+        tech_skills=result.tech_skills,
+        soft_skills=result.soft_skills,
+        experience_years=result.experience_years,
+    )
+    await session.commit()
+
     return JobAnalysisResponse(
         tech_skills=result.tech_skills,
         soft_skills=result.soft_skills,

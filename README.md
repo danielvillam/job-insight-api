@@ -7,11 +7,14 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 ## Características
 
 - Extracción de habilidades técnicas, soft skills y años de experiencia de texto libre.
-- Comparación de perfil vs. vacante con porcentaje de compatibilidad.
+- Comparación de perfil vs. vacante con porcentaje de compatibilidad (incluye soft skills).
 - Resolución de alias comunes (`postgres` → `postgresql`, `k8s` → `kubernetes`, etc.).
 - Generación de rutas de aprendizaje priorizadas con recursos específicos por habilidad.
+- Endpoint consolidado para análisis completo en una sola llamada.
+- Persistencia en base de datos con transacciones por endpoint.
+- Rate limiting por endpoint y CORS configurable por variables de entorno.
 - Documentación interactiva automática (Swagger UI y ReDoc).
-- Base de datos SQLite async con SQLAlchemy.
+- Migraciones versionadas con Alembic.
 
 ---
 
@@ -22,8 +25,12 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 | Framework | FastAPI 0.115 |
 | Servidor ASGI | Uvicorn 0.30 |
 | Validación | Pydantic v2 |
+| Configuración | pydantic-settings |
 | Base de datos | SQLite (local) / PostgreSQL (producción) |
-| ORM | SQLAlchemy 2.0 async |
+| ORM / DB async | SQLAlchemy 2.0 + aiosqlite / asyncpg |
+| Migraciones | Alembic |
+| Rate limiting | SlowAPI |
+| Testing | Pytest + FastAPI TestClient |
 | Lenguaje | Python 3.11+ |
 
 ---
@@ -32,12 +39,17 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 
 ```
 job-insight-api/
+├── alembic/                      # Migraciones de base de datos
+│   ├── env.py
+│   └── versions/
 ├── app/
 │   ├── main.py                      # Inicialización de FastAPI y routers
+│   ├── core/
+│   │   ├── settings.py              # Configuración centralizada
+│   │   └── rate_limiter.py          # Configuración de SlowAPI
 │   ├── routers/
-│   │   ├── jobs.py                  # POST /jobs/analyze-job
-│   │   └── analysis.py             # POST /analysis/match-profile
-│   │                                #  POST /analysis/learning-path
+│   │   ├── jobs.py                  # Endpoints de vacantes
+│   │   └── analysis.py              # Endpoints de matching y recomendaciones
 │   ├── services/
 │   │   ├── skill_extractor.py       # Extracción de habilidades con regex
 │   │   ├── matcher.py               # Comparación perfil vs. vacante
@@ -49,7 +61,13 @@ job-insight-api/
 │   │   ├── connection.py            # Engine async y sesión SQLAlchemy
 │   │   └── models.py                # Tablas SQLAlchemy (JobAnalysis, ProfileMatch)
 │   └── utils/
-│       └── skill_dictionary.py      # Diccionario de 100+ habilidades técnicas
+│       ├── skill_dictionary.py       # Diccionario de habilidades por categoría
+│       └── skill_aliases.py          # Alias canónicos compartidos
+├── tests/
+│   ├── test_api.py
+│   ├── test_matcher.py
+│   └── test_skill_extractor.py
+├── alembic.ini
 ├── requirements.txt
 └── README.md
 ```
@@ -61,12 +79,13 @@ job-insight-api/
 ### Requisitos previos
 
 - Python 3.11 o superior.
+- Entorno virtual recomendado.
 
 ### Pasos
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/job-insight-api.git
+git clone <repo-url>
 cd job-insight-api
 
 # 2. Crear y activar entorno virtual
@@ -79,7 +98,13 @@ source .venv/bin/activate
 # 3. Instalar dependencias
 pip install -r requirements.txt
 
-# 4. Ejecutar el servidor
+# 4. (Opcional) crear archivo .env para personalizar variables
+# (el proyecto lee .env automáticamente mediante pydantic-settings)
+
+# 5. Ejecutar migraciones
+alembic upgrade head
+
+# 6. Ejecutar el servidor
 python -m uvicorn app.main:app --reload
 ```
 
@@ -99,11 +124,53 @@ La API ya está desplegada en Render y disponible públicamente.
 
 - `PYTHON_VERSION=3.11.9`
 - `DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DBNAME`
+- `CORS_ALLOW_ORIGINS=["https://tu-frontend.com"]`
+- `CORS_ALLOW_CREDENTIALS=false`
+- `RATE_LIMIT_ANALYZE_JOB=30/minute`
+- `RATE_LIMIT_MATCH_PROFILE=30/minute`
+- `RATE_LIMIT_LEARNING_PATH=30/minute`
+- `RATE_LIMIT_FULL_REPORT=20/minute`
+- `RATE_LIMIT_TRUST_PROXY_HEADERS=false` (activar solo si confías en tu reverse proxy)
+- `REQUEST_MAX_DESCRIPTION_LENGTH=10000`
+
+### Variables de entorno clave (desarrollo)
+
+- `DATABASE_URL=sqlite+aiosqlite:///./job_insight.db`
+- `DEBUG=false`
+- `CORS_ALLOW_ORIGINS=["*"]`
+- `CORS_ALLOW_CREDENTIALS=false`
 
 ### Nota de base de datos
 
 - **No se recomienda SQLite en producción** en Render.
 - Para persistencia estable usa **PostgreSQL** (Render PostgreSQL o externo).
+
+### Migraciones (Alembic)
+
+Este proyecto usa **Alembic** para versionar el esquema de base de datos.
+
+```bash
+# Aplicar todas las migraciones pendientes
+alembic upgrade head
+
+# Crear una nueva migración
+alembic revision -m "describe-tu-cambio"
+
+# Revertir una migración
+alembic downgrade -1
+```
+
+---
+
+## Desarrollo y pruebas
+
+```bash
+# Ejecutar tests
+python -m pytest -q
+
+# Ejecutar un archivo concreto de tests
+python -m pytest tests/test_skill_extractor.py -q
+```
 
 ---
 
@@ -120,6 +187,17 @@ La API ya está desplegada en Render y disponible públicamente.
 
 ## Endpoints
 
+### Ejemplo rápido con `curl`
+
+```bash
+curl -X POST http://127.0.0.1:8000/analysis/full-report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_skills": ["python", "postgres", "teamwork"],
+    "job_description": "We are looking for a Python developer with PostgreSQL, Docker and teamwork."
+  }'
+```
+
 ### `GET /`
 Health check de la API.
 
@@ -127,7 +205,10 @@ Health check de la API.
 ```json
 {
   "status": "ok",
-  "message": "Job Insight API is running"
+  "message": "Job Insight API is running",
+  "version": "1.1.0",
+  "database": "up",
+  "uptime_seconds": 123
 }
 ```
 
@@ -174,7 +255,10 @@ Compara las habilidades de un desarrollador con las requeridas en una vacante y 
   "compatibility_percentage": 50.0,
   "matching_skills": ["django", "postgresql", "python"],
   "missing_skills": ["aws", "docker"],
-  "total_job_skills": 6
+  "total_job_skills": 6,
+  "matching_soft_skills": ["teamwork"],
+  "missing_soft_skills": ["leadership"],
+  "total_job_soft_skills": 2
 }
 ```
 
@@ -190,30 +274,25 @@ Genera recomendaciones de aprendizaje priorizadas para cada habilidad faltante.
 }
 ```
 
-**Response:**
+---
+
+### `POST /analysis/full-report`
+Ejecuta en una sola llamada: análisis de vacante, comparación de perfil y generación de ruta de aprendizaje.
+
+**Request body:**
 ```json
 {
-  "total_recommendations": 3,
-  "recommendations": [
-    {
-      "skill": "postgresql",
-      "category": "databases",
-      "priority": "high",
-      "suggestion": "Curso: PostgreSQL Tutorial oficial → diseñar un esquema normalizado → consultas avanzadas."
-    },
-    {
-      "skill": "docker",
-      "category": "devops",
-      "priority": "medium",
-      "suggestion": "Curso: Docker docs Get Started → dockerizar un proyecto propio → Docker Compose."
-    },
-    {
-      "skill": "aws",
-      "category": "devops",
-      "priority": "medium",
-      "suggestion": "Curso: AWS Skill Builder (gratis) → certificación Cloud Practitioner → labs prácticos."
-    }
-  ]
+  "profile_skills": ["python", "postgres", "teamwork"],
+  "job_description": "We are looking for a Python developer with PostgreSQL, Docker and teamwork."
+}
+```
+
+**Response (resumen):**
+```json
+{
+  "job_analysis": {"tech_skills": ["docker", "postgresql", "python"], "soft_skills": ["teamwork"], "experience_years": null, "total_skills_found": 4},
+  "profile_match": {"compatibility_percentage": 75.0, "matching_skills": ["postgresql", "python"], "missing_skills": ["docker"], "total_job_skills": 3, "matching_soft_skills": ["teamwork"], "missing_soft_skills": [], "total_job_soft_skills": 1},
+  "learning_path": {"total_recommendations": 1, "recommendations": [{"skill": "docker", "category": "devops", "priority": "medium", "suggestion": "..."}]}
 }
 ```
 
@@ -229,7 +308,7 @@ Las recomendaciones se ordenan por prioridad (`high` → `medium` → `low`), de
 
 ## Habilidades detectadas
 
-El diccionario cubre más de 100 habilidades en 7 categorías:
+El diccionario cubre habilidades técnicas en 7 categorías:
 
 | Categoría | Ejemplos |
 |---|---|
@@ -243,7 +322,7 @@ El diccionario cubre más de 100 habilidades en 7 categorías:
 
 ### Alias soportados
 
-| Alias | Canonico |
+| Alias | Canónico |
 |---|---|
 | `node`, `node.js` | `nodejs` |
 | `react.js`, `reactjs` | `react` |
