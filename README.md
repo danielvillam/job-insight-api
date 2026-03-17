@@ -7,9 +7,11 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 ## Características
 
 - Extracción de habilidades técnicas, soft skills y años de experiencia de texto libre.
-- Comparación de perfil vs. vacante con porcentaje de compatibilidad.
+- Comparación de perfil vs. vacante con porcentaje de compatibilidad (incluye soft skills).
 - Resolución de alias comunes (`postgres` → `postgresql`, `k8s` → `kubernetes`, etc.).
 - Generación de rutas de aprendizaje priorizadas con recursos específicos por habilidad.
+- Endpoint consolidado para análisis completo en una sola llamada.
+- Rate limiting por endpoint y CORS configurable por variables de entorno.
 - Documentación interactiva automática (Swagger UI y ReDoc).
 - Base de datos SQLite async con SQLAlchemy.
 
@@ -66,7 +68,7 @@ job-insight-api/
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/job-insight-api.git
+git clone <repo-url>
 cd job-insight-api
 
 # 2. Crear y activar entorno virtual
@@ -99,6 +101,11 @@ La API ya está desplegada en Render y disponible públicamente.
 
 - `PYTHON_VERSION=3.11.9`
 - `DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DBNAME`
+- `CORS_ALLOW_ORIGINS=["https://tu-frontend.com"]`
+- `RATE_LIMIT_ANALYZE_JOB=30/minute`
+- `RATE_LIMIT_MATCH_PROFILE=30/minute`
+- `RATE_LIMIT_LEARNING_PATH=30/minute`
+- `RATE_LIMIT_FULL_REPORT=20/minute`
 
 ### Nota de base de datos
 
@@ -120,6 +127,17 @@ La API ya está desplegada en Render y disponible públicamente.
 
 ## Endpoints
 
+### Ejemplo rápido con `curl`
+
+```bash
+curl -X POST http://127.0.0.1:8000/analysis/full-report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_skills": ["python", "postgres", "teamwork"],
+    "job_description": "We are looking for a Python developer with PostgreSQL, Docker and teamwork."
+  }'
+```
+
 ### `GET /`
 Health check de la API.
 
@@ -127,7 +145,10 @@ Health check de la API.
 ```json
 {
   "status": "ok",
-  "message": "Job Insight API is running"
+  "message": "Job Insight API is running",
+  "version": "1.1.0",
+  "database": "up",
+  "uptime_seconds": 123
 }
 ```
 
@@ -174,7 +195,10 @@ Compara las habilidades de un desarrollador con las requeridas en una vacante y 
   "compatibility_percentage": 50.0,
   "matching_skills": ["django", "postgresql", "python"],
   "missing_skills": ["aws", "docker"],
-  "total_job_skills": 6
+  "total_job_skills": 6,
+  "matching_soft_skills": ["teamwork"],
+  "missing_soft_skills": ["leadership"],
+  "total_job_soft_skills": 2
 }
 ```
 
@@ -187,6 +211,28 @@ Genera recomendaciones de aprendizaje priorizadas para cada habilidad faltante.
 ```json
 {
   "missing_skills": ["docker", "postgresql", "aws"]
+}
+```
+
+---
+
+### `POST /analysis/full-report`
+Ejecuta en una sola llamada: análisis de vacante, comparación de perfil y generación de ruta de aprendizaje.
+
+**Request body:**
+```json
+{
+  "profile_skills": ["python", "postgres", "teamwork"],
+  "job_description": "We are looking for a Python developer with PostgreSQL, Docker and teamwork."
+}
+```
+
+**Response (resumen):**
+```json
+{
+  "job_analysis": {"tech_skills": ["docker", "postgresql", "python"], "soft_skills": ["teamwork"], "experience_years": null, "total_skills_found": 4},
+  "profile_match": {"compatibility_percentage": 75.0, "matching_skills": ["postgresql", "python"], "missing_skills": ["docker"], "total_job_skills": 3, "matching_soft_skills": ["teamwork"], "missing_soft_skills": [], "total_job_soft_skills": 1},
+  "learning_path": {"total_recommendations": 1, "recommendations": [{"skill": "docker", "category": "devops", "priority": "medium", "suggestion": "..."}]}
 }
 ```
 
