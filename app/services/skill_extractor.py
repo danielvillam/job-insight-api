@@ -11,18 +11,24 @@ from app.utils.skill_aliases import SKILL_ALIASES
 from app.models.job_models import ExtractedSkills
 
 
+def _compile_skill_pattern(term: str) -> re.Pattern[str]:
+    """Compila un patron robusto para skills con simbolos como c++, .net o ci/cd."""
+    escaped = re.escape(term)
+    return re.compile(rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])", re.IGNORECASE)
+
+
 def _compile_patterns() -> list[tuple[re.Pattern[str], str]]:
     """Pre-compila patrones regex para cada skill y alias (se ejecuta una sola vez)."""
     patterns: list[tuple[re.Pattern[str], str]] = []
 
     # Patrones para habilidades del diccionario principal
     for skill in get_all_tech_skills():
-        pat = re.compile(rf"\b{re.escape(skill)}\b", re.IGNORECASE)
+        pat = _compile_skill_pattern(skill)
         patterns.append((pat, skill))
 
     # Patrones para alias → nombre canónico
     for alias, canonical in SKILL_ALIASES.items():
-        pat = re.compile(rf"\b{re.escape(alias)}\b", re.IGNORECASE)
+        pat = _compile_skill_pattern(alias)
         patterns.append((pat, canonical))
 
     return patterns
@@ -31,7 +37,7 @@ def _compile_patterns() -> list[tuple[re.Pattern[str], str]]:
 # Compilar una sola vez al importar el módulo
 _TECH_PATTERNS = _compile_patterns()
 _SOFT_PATTERNS = [
-    (re.compile(rf"\b{re.escape(s)}\b", re.IGNORECASE), s)
+    (_compile_skill_pattern(s), s)
     for s in SOFT_SKILLS
 ]
 _EXP_PATTERNS = [re.compile(p, re.IGNORECASE) for p in EXPERIENCE_PATTERNS]
