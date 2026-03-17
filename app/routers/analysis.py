@@ -54,6 +54,7 @@ async def match(
         matching_soft_skills=result["matching_soft_skills"],
         missing_soft_skills=result["missing_soft_skills"],
     )
+    await session.commit()
 
     return MatchProfileResponse(**result)
 
@@ -120,6 +121,7 @@ async def full_report(
         matching_soft_skills=match_result["matching_soft_skills"],
         missing_soft_skills=match_result["missing_soft_skills"],
     )
+    await session.commit()
 
     return FullAnalysisResponse(
         job_analysis=JobAnalysisResponse(

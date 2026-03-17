@@ -28,7 +28,7 @@ async def save_job_analysis(
         experience_years=experience_years,
     )
     session.add(record)
-    await session.commit()
+    await session.flush()
     await session.refresh(record)
     return record
 
@@ -50,6 +50,6 @@ async def save_profile_match(
         missing_soft_skills=json.dumps(missing_soft_skills),
     )
     session.add(record)
-    await session.commit()
+    await session.flush()
     await session.refresh(record)
     return record

@@ -38,6 +38,7 @@ async def analyze_job(
         soft_skills=result.soft_skills,
         experience_years=result.experience_years,
     )
+    await session.commit()
 
     return JobAnalysisResponse(
         tech_skills=result.tech_skills,
