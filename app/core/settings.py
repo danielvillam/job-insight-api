@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     rate_limit_match_profile: str = "30/minute"
     rate_limit_learning_path: str = "30/minute"
     rate_limit_full_report: str = "20/minute"
+    rate_limit_trust_proxy_headers: bool = False
 
     request_max_description_length: int = 10000
 
