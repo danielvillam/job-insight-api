@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import inspect, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.core.settings import settings
@@ -25,7 +25,6 @@ async def create_tables():
     from app.database.models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await _ensure_profile_match_columns(conn)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -42,26 +41,3 @@ async def check_connection() -> bool:
         return True
     except Exception:
         return False
-
-
-async def _ensure_profile_match_columns(conn) -> None:
-    """Agrega columnas nuevas en instalaciones existentes sin migraciones formales."""
-
-    def _get_columns(sync_conn) -> set[str]:
-        inspector = inspect(sync_conn)
-        return {col["name"] for col in inspector.get_columns("profile_matches")}
-
-    existing_columns = await conn.run_sync(_get_columns)
-    alter_statements: list[str] = []
-
-    if "matching_soft_skills" not in existing_columns:
-        alter_statements.append(
-            "ALTER TABLE profile_matches ADD COLUMN matching_soft_skills TEXT DEFAULT '[]'"
-        )
-    if "missing_soft_skills" not in existing_columns:
-        alter_statements.append(
-            "ALTER TABLE profile_matches ADD COLUMN missing_soft_skills TEXT DEFAULT '[]'"
-        )
-
-    for statement in alter_statements:
-        await conn.execute(text(statement))
