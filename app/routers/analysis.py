@@ -1,7 +1,5 @@
 """Router para endpoints de comparación de perfil y ruta de aprendizaje."""
 
-import asyncio
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,13 +36,7 @@ async def match(
     payload: MatchProfileRequest,
     session: AsyncSession = Depends(get_session),
 ) -> MatchProfileResponse:
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None,
-        match_profile,
-        payload.profile_skills,
-        payload.job_description,
-    )
+    result = match_profile(payload.profile_skills, payload.job_description)
 
     await save_profile_match(
         session=session,
@@ -67,12 +59,7 @@ async def match(
 )
 @limiter.limit(settings.rate_limit_learning_path)
 async def learning_path(request: Request, payload: LearningPathRequest) -> LearningPathResponse:
-    loop = asyncio.get_running_loop()
-    recommendations = await loop.run_in_executor(
-        None,
-        generate_learning_path,
-        payload.missing_skills,
-    )
+    recommendations = generate_learning_path(payload.missing_skills)
     return LearningPathResponse(
         total_recommendations=len(recommendations),
         recommendations=recommendations,
@@ -91,20 +78,13 @@ async def full_report(
     payload: FullAnalysisRequest,
     session: AsyncSession = Depends(get_session),
 ) -> FullAnalysisResponse:
-    loop = asyncio.get_running_loop()
-    extracted = await loop.run_in_executor(None, extract_skills, payload.job_description)
-    match_result = await loop.run_in_executor(
-        None,
-        match_profile,
+    extracted = extract_skills(payload.job_description)
+    match_result = match_profile(
         payload.profile_skills,
         payload.job_description,
         extracted,
     )
-    recommendations = await loop.run_in_executor(
-        None,
-        generate_learning_path,
-        match_result["missing_skills"],
-    )
+    recommendations = generate_learning_path(match_result["missing_skills"])
 
     await save_job_analysis(
         session=session,

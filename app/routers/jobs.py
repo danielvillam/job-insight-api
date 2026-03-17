@@ -1,7 +1,5 @@
 """Router para endpoints de análisis de vacantes."""
 
-import asyncio
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,8 +26,7 @@ async def analyze_job(
     payload: JobDescriptionRequest,
     session: AsyncSession = Depends(get_session),
 ) -> JobAnalysisResponse:
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, extract_skills, payload.description)
+    result = extract_skills(payload.description)
 
     await save_job_analysis(
         session=session,
