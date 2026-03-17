@@ -1,6 +1,7 @@
 """Configuracion centralizada de la aplicacion."""
 
 from pydantic import Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./job_insight.db"
     cors_allow_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_allow_credentials: bool = False
 
     rate_limit_analyze_job: str = "30/minute"
     rate_limit_match_profile: str = "30/minute"
@@ -25,6 +27,14 @@ class Settings(BaseSettings):
     rate_limit_full_report: str = "20/minute"
 
     request_max_description_length: int = 10000
+
+    @model_validator(mode="after")
+    def validate_cors(self) -> "Settings":
+        if self.cors_allow_credentials and "*" in self.cors_allow_origins:
+            raise ValueError(
+                "Invalid CORS configuration: '*' cannot be used with credentials enabled."
+            )
+        return self
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
