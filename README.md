@@ -11,9 +11,10 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 - Resolución de alias comunes (`postgres` → `postgresql`, `k8s` → `kubernetes`, etc.).
 - Generación de rutas de aprendizaje priorizadas con recursos específicos por habilidad.
 - Endpoint consolidado para análisis completo en una sola llamada.
+- Persistencia en base de datos con transacciones por endpoint.
 - Rate limiting por endpoint y CORS configurable por variables de entorno.
 - Documentación interactiva automática (Swagger UI y ReDoc).
-- Base de datos SQLite async con SQLAlchemy.
+- Migraciones versionadas con Alembic.
 
 ---
 
@@ -24,8 +25,12 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 | Framework | FastAPI 0.115 |
 | Servidor ASGI | Uvicorn 0.30 |
 | Validación | Pydantic v2 |
+| Configuración | pydantic-settings |
 | Base de datos | SQLite (local) / PostgreSQL (producción) |
-| ORM | SQLAlchemy 2.0 async |
+| ORM / DB async | SQLAlchemy 2.0 + aiosqlite / asyncpg |
+| Migraciones | Alembic |
+| Rate limiting | SlowAPI |
+| Testing | Pytest + FastAPI TestClient |
 | Lenguaje | Python 3.11+ |
 
 ---
@@ -34,12 +39,17 @@ API REST construida con **FastAPI** que analiza descripciones de vacantes de emp
 
 ```
 job-insight-api/
+├── alembic/                      # Migraciones de base de datos
+│   ├── env.py
+│   └── versions/
 ├── app/
 │   ├── main.py                      # Inicialización de FastAPI y routers
+│   ├── core/
+│   │   ├── settings.py              # Configuración centralizada
+│   │   └── rate_limiter.py          # Configuración de SlowAPI
 │   ├── routers/
-│   │   ├── jobs.py                  # POST /jobs/analyze-job
-│   │   └── analysis.py             # POST /analysis/match-profile
-│   │                                #  POST /analysis/learning-path
+│   │   ├── jobs.py                  # Endpoints de vacantes
+│   │   └── analysis.py              # Endpoints de matching y recomendaciones
 │   ├── services/
 │   │   ├── skill_extractor.py       # Extracción de habilidades con regex
 │   │   ├── matcher.py               # Comparación perfil vs. vacante
@@ -51,7 +61,13 @@ job-insight-api/
 │   │   ├── connection.py            # Engine async y sesión SQLAlchemy
 │   │   └── models.py                # Tablas SQLAlchemy (JobAnalysis, ProfileMatch)
 │   └── utils/
-│       └── skill_dictionary.py      # Diccionario de 100+ habilidades técnicas
+│       ├── skill_dictionary.py       # Diccionario de habilidades por categoría
+│       └── skill_aliases.py          # Alias canónicos compartidos
+├── tests/
+│   ├── test_api.py
+│   ├── test_matcher.py
+│   └── test_skill_extractor.py
+├── alembic.ini
 ├── requirements.txt
 └── README.md
 ```
@@ -63,6 +79,7 @@ job-insight-api/
 ### Requisitos previos
 
 - Python 3.11 o superior.
+- Entorno virtual recomendado.
 
 ### Pasos
 
@@ -81,10 +98,13 @@ source .venv/bin/activate
 # 3. Instalar dependencias
 pip install -r requirements.txt
 
-# 4. Ejecutar migraciones
+# 4. (Opcional) crear archivo .env para personalizar variables
+# (el proyecto lee .env automáticamente mediante pydantic-settings)
+
+# 5. Ejecutar migraciones
 alembic upgrade head
 
-# 5. Ejecutar el servidor
+# 6. Ejecutar el servidor
 python -m uvicorn app.main:app --reload
 ```
 
@@ -111,6 +131,14 @@ La API ya está desplegada en Render y disponible públicamente.
 - `RATE_LIMIT_LEARNING_PATH=30/minute`
 - `RATE_LIMIT_FULL_REPORT=20/minute`
 - `RATE_LIMIT_TRUST_PROXY_HEADERS=false` (activar solo si confías en tu reverse proxy)
+- `REQUEST_MAX_DESCRIPTION_LENGTH=10000`
+
+### Variables de entorno clave (desarrollo)
+
+- `DATABASE_URL=sqlite+aiosqlite:///./job_insight.db`
+- `DEBUG=false`
+- `CORS_ALLOW_ORIGINS=["*"]`
+- `CORS_ALLOW_CREDENTIALS=false`
 
 ### Nota de base de datos
 
@@ -127,6 +155,21 @@ alembic upgrade head
 
 # Crear una nueva migración
 alembic revision -m "describe-tu-cambio"
+
+# Revertir una migración
+alembic downgrade -1
+```
+
+---
+
+## Desarrollo y pruebas
+
+```bash
+# Ejecutar tests
+python -m pytest -q
+
+# Ejecutar un archivo concreto de tests
+python -m pytest tests/test_skill_extractor.py -q
 ```
 
 ---
@@ -265,7 +308,7 @@ Las recomendaciones se ordenan por prioridad (`high` → `medium` → `low`), de
 
 ## Habilidades detectadas
 
-El diccionario cubre más de 100 habilidades en 7 categorías:
+El diccionario cubre habilidades técnicas en 7 categorías:
 
 | Categoría | Ejemplos |
 |---|---|
@@ -279,7 +322,7 @@ El diccionario cubre más de 100 habilidades en 7 categorías:
 
 ### Alias soportados
 
-| Alias | Canonico |
+| Alias | Canónico |
 |---|---|
 | `node`, `node.js` | `nodejs` |
 | `react.js`, `reactjs` | `react` |
