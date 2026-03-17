@@ -7,31 +7,8 @@ from app.utils.skill_dictionary import (
     SOFT_SKILLS,
     get_all_tech_skills,
 )
+from app.utils.skill_aliases import SKILL_ALIASES
 from app.models.job_models import ExtractedSkills
-
-# Alias → nombre canónico. Permite detectar variaciones comunes.
-_ALIASES: dict[str, str] = {
-    "node.js": "nodejs",
-    "node": "nodejs",
-    "react.js": "react",
-    "reactjs": "react",
-    "vue.js": "vue",
-    "vuejs": "vue",
-    "angular.js": "angular",
-    "angularjs": "angular",
-    "postgres": "postgresql",
-    "mongo": "mongodb",
-    "k8s": "kubernetes",
-    "tf": "terraform",
-    "js": "javascript",
-    "ts": "typescript",
-    "c sharp": "c#",
-    "csharp": "c#",
-    "dotnet": ".net",
-    "scikit learn": "scikit-learn",
-    "sklearn": "scikit-learn",
-    "gh actions": "github actions",
-}
 
 
 def _compile_patterns() -> list[tuple[re.Pattern[str], str]]:
@@ -44,7 +21,7 @@ def _compile_patterns() -> list[tuple[re.Pattern[str], str]]:
         patterns.append((pat, skill))
 
     # Patrones para alias → nombre canónico
-    for alias, canonical in _ALIASES.items():
+    for alias, canonical in SKILL_ALIASES.items():
         pat = re.compile(rf"\b{re.escape(alias)}\b", re.IGNORECASE)
         patterns.append((pat, canonical))
 
@@ -92,9 +69,12 @@ def _extract_soft_skills(text: str) -> list[str]:
 
 
 def _extract_experience(text: str) -> int | None:
-    """Extrae años de experiencia del texto. Retorna el primer valor encontrado."""
+    """Extrae años de experiencia del texto. Retorna el mayor valor encontrado."""
+    found_values: list[int] = []
     for pattern in _EXP_PATTERNS:
-        match = pattern.search(text)
-        if match:
-            return int(match.group(1))
-    return None
+        for match in pattern.finditer(text):
+            found_values.append(int(match.group(1)))
+
+    if not found_values:
+        return None
+    return max(found_values)
