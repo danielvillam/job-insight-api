@@ -1,11 +1,15 @@
 """Configuracion de conexion a base de datos con SQLAlchemy async."""
 
 from collections.abc import AsyncGenerator
+import logging
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.core.settings import settings
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = settings.database_url
 
@@ -39,5 +43,6 @@ async def check_connection() -> bool:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return True
-    except Exception:
+    except (SQLAlchemyError, OSError) as exc:
+        logger.warning("Database connectivity check failed: %s", exc)
         return False
