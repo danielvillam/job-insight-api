@@ -81,7 +81,10 @@ source .venv/bin/activate
 # 3. Instalar dependencias
 pip install -r requirements.txt
 
-# 4. Ejecutar el servidor
+# 4. Ejecutar migraciones
+alembic upgrade head
+
+# 5. Ejecutar el servidor
 python -m uvicorn app.main:app --reload
 ```
 
@@ -102,15 +105,29 @@ La API ya está desplegada en Render y disponible públicamente.
 - `PYTHON_VERSION=3.11.9`
 - `DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:5432/DBNAME`
 - `CORS_ALLOW_ORIGINS=["https://tu-frontend.com"]`
+- `CORS_ALLOW_CREDENTIALS=false`
 - `RATE_LIMIT_ANALYZE_JOB=30/minute`
 - `RATE_LIMIT_MATCH_PROFILE=30/minute`
 - `RATE_LIMIT_LEARNING_PATH=30/minute`
 - `RATE_LIMIT_FULL_REPORT=20/minute`
+- `RATE_LIMIT_TRUST_PROXY_HEADERS=false` (activar solo si confías en tu reverse proxy)
 
 ### Nota de base de datos
 
 - **No se recomienda SQLite en producción** en Render.
 - Para persistencia estable usa **PostgreSQL** (Render PostgreSQL o externo).
+
+### Migraciones (Alembic)
+
+Este proyecto usa **Alembic** para versionar el esquema de base de datos.
+
+```bash
+# Aplicar todas las migraciones pendientes
+alembic upgrade head
+
+# Crear una nueva migración
+alembic revision -m "describe-tu-cambio"
+```
 
 ---
 
@@ -233,33 +250,6 @@ Ejecuta en una sola llamada: análisis de vacante, comparación de perfil y gene
   "job_analysis": {"tech_skills": ["docker", "postgresql", "python"], "soft_skills": ["teamwork"], "experience_years": null, "total_skills_found": 4},
   "profile_match": {"compatibility_percentage": 75.0, "matching_skills": ["postgresql", "python"], "missing_skills": ["docker"], "total_job_skills": 3, "matching_soft_skills": ["teamwork"], "missing_soft_skills": [], "total_job_soft_skills": 1},
   "learning_path": {"total_recommendations": 1, "recommendations": [{"skill": "docker", "category": "devops", "priority": "medium", "suggestion": "..."}]}
-}
-```
-
-**Response:**
-```json
-{
-  "total_recommendations": 3,
-  "recommendations": [
-    {
-      "skill": "postgresql",
-      "category": "databases",
-      "priority": "high",
-      "suggestion": "Curso: PostgreSQL Tutorial oficial → diseñar un esquema normalizado → consultas avanzadas."
-    },
-    {
-      "skill": "docker",
-      "category": "devops",
-      "priority": "medium",
-      "suggestion": "Curso: Docker docs Get Started → dockerizar un proyecto propio → Docker Compose."
-    },
-    {
-      "skill": "aws",
-      "category": "devops",
-      "priority": "medium",
-      "suggestion": "Curso: AWS Skill Builder (gratis) → certificación Cloud Practitioner → labs prácticos."
-    }
-  ]
 }
 ```
 
